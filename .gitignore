@@ -1,0 +1,13 @@
+/backend/target
+node_modules/
+.next/
+.env*
+!.env.example
+/backend/ldk-data/
+*.log
+.next-peer/
+/.regtest-data/
+
+# Separate repos: ligthening-node/frontend and ligthening-node/backend
+/frontend/
+/backend/

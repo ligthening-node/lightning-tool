@@ -1,0 +1,90 @@
+# Local regtest stack: bitcoind, our node behind the API, a second node to open channels with, and
+# the web app. Every port is published on 127.0.0.1 only.
+#
+#   LN_API_TOKEN=$(openssl rand -hex 32) docker compose up --build
+#
+# backend/scripts/regtest.sh mines blocks, funds addresses and talks to the peer node.
+
+x-node-env: &node-env
+  LN_NETWORK: regtest
+  LN_RPC_HOST: bitcoind
+  LN_RPC_PORT: "18443"
+  LN_RPC_USER: lightning
+  LN_RPC_PASSWORD: lightning
+  LN_DATA_DIR: /data
+  LN_LISTEN_ADDRESS: 0.0.0.0:9735
+  LN_API_BIND: container
+
+services:
+  bitcoind:
+    image: polarlightning/bitcoind:30.0
+    # Docker brings it back after a daemon restart, and gets 30 s to flush blocks to disk on a stop.
+    # An unclean stop once lost about 170 regtest blocks that were still only in the page cache.
+    restart: unless-stopped
+    stop_grace_period: 30s
+    command:
+      - bitcoind
+      - -regtest=1
+      - -server=1
+      - -txindex=1
+      - -fallbackfee=0.0002
+      - -rpcuser=lightning
+      - -rpcpassword=lightning
+      - -rpcbind=0.0.0.0
+      - -rpcallowip=0.0.0.0/0
+      - -printtoconsole
+    ports:
+      - "127.0.0.1:18443:18443"
+    volumes:
+      - bitcoind-data:/home/bitcoin/.bitcoin
+    healthcheck:
+      test: ["CMD", "bitcoin-cli", "-regtest", "-rpcuser=lightning", "-rpcpassword=lightning", "getblockchaininfo"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  api:
+    build: ./backend
+    environment:
+      <<: *node-env
+      LN_NODE_ALIAS: lightning-tool
+      LN_API_TOKEN: ${LN_API_TOKEN:?set LN_API_TOKEN, for example with openssl rand -hex 32}
+    ports:
+      - "127.0.0.1:3001:3001"
+      - "127.0.0.1:9735:9735"
+    volumes:
+      - node-data:/data
+    depends_on:
+      bitcoind:
+        condition: service_healthy
+
+  # A second node to connect to, open channels with and pay. Reach it at api-peer:9735 from the
+  # api container, and through its own API on 127.0.0.1:3002.
+  api-peer:
+    build: ./backend
+    environment:
+      <<: *node-env
+      LN_NODE_ALIAS: regtest-peer
+      LN_API_TOKEN: ${LN_API_TOKEN:?set LN_API_TOKEN}
+    ports:
+      - "127.0.0.1:3002:3001"
+    volumes:
+      - peer-data:/data
+    depends_on:
+      bitcoind:
+        condition: service_healthy
+
+  web:
+    build: ./frontend
+    environment:
+      LN_API_URL: http://api:3001
+      LN_API_TOKEN: ${LN_API_TOKEN:?set LN_API_TOKEN}
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  bitcoind-data:
+  node-data:
+  peer-data:
