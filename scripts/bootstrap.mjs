@@ -99,6 +99,8 @@ export async function bootstrapChannels(token, log) {
     log(`bootstrap: funded peer node with ${PEER_FUND_BTC} BTC`);
     await syncBoth(token);
   }
+  // The node only opens a channel with a peer it is connected to, so connect first.
+  await api(MAIN_API, token, "POST", "/peers", { node_id: peer.node_id, address: PEER_ADDRESS });
   for (let i = existing + 1; i <= CHANNELS; i++) {
     await api(MAIN_API, token, "POST", "/channels", {
       node_id: peer.node_id,
