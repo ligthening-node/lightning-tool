@@ -3,7 +3,7 @@
 <style>html,body{margin:0;background:#0b1220}canvas{display:block}</style>
 <canvas id="c" width="1280" height="720"></canvas>
 <script>
-// A decorative market scene that loops with no seam: every moving thing is periodic in t over
+// A decorative payment-flow scene that loops with no seam: every moving thing is periodic in t over
 // LOOP seconds. The data is made up and carries no real prices or addresses.
 const W = 1280, H = 720, LOOP = 12;
 const ctx = document.getElementById("c").getContext("2d");
@@ -12,26 +12,8 @@ const COLORS = { bg: "#0b1220", grid: "#94a3b8", up: "#4ade80", down: "#f87171",
 // Small seeded generator so every render is identical.
 function rng(seed) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
 const rand = rng(20261001);
-
-// --- candles: a price walk whose total change is zero, so it tiles when it wraps
-const K = 64, SPACING = 20;
-const steps = Array.from({ length: K }, () => (rand() - 0.5) * 34);
-const mean = steps.reduce((a, b) => a + b, 0) / K;
-const price = [0]; for (let i = 0; i < K; i++) price.push(price[i] + steps[i] - mean);
-const wick = Array.from({ length: K }, () => [rand() * 14, rand() * 14]);
-const volume = Array.from({ length: K }, () => 0.15 + rand() * 0.85);
-const CH_TOP = 330, CH_BOTTOM = 600;
-const pMin = Math.min(...price), pMax = Math.max(...price);
-const py = (p) => CH_BOTTOM - 40 - ((p - pMin) / (pMax - pMin)) * (CH_BOTTOM - CH_TOP - 80);
-
-// --- ticker rows
-const ROWS = 26, ROW_H = 28;
-const PAIRS = ["BTC/USD", "BTC/EUR", "SAT/USD", "LN/BTC", "BTC/GBP", "BTC/JPY"];
-const ticker = Array.from({ length: ROWS }, () => {
-  const pair = PAIRS[Math.floor(rand() * PAIRS.length)];
-  const move = (rand() - 0.46) * 2.4;
-  return { pair, px: (20000 + rand() * 60000).toFixed(2), move, vol: Math.floor(100 + rand() * 9000) };
-});
+// The removed candles and ticker drew 360 values from this sequence; skipping them keeps the nodes and flows where they were.
+for (let i = 0; i < 360; i++) rand();
 
 // --- payment flows: bezier arcs between node pairs
 const nodes = Array.from({ length: 9 }, (_, i) => ({ x: 90 + (i % 3) * 400 + rand() * 60, y: 70 + Math.floor(i / 3) * 80 + rand() * 30 }));
@@ -82,37 +64,6 @@ function draw(frame, frames) {
       const [x, y] = bez(f, Math.max(0, u - k * 0.012));
       ctx.globalAlpha = 0.9 * (1 - k / 6); ctx.fillStyle = COLORS.amber; ctx.beginPath(); ctx.arc(x, y, f.size * (1 - k / 9), 0, 7); ctx.fill();
     }
-  }
-  ctx.globalAlpha = 1;
-
-  // candles scrolling left, one full period per loop (kept left of the ticker column)
-  ctx.save(); ctx.beginPath(); ctx.rect(0, 0, 905, H); ctx.clip();
-  const scroll = t * K * SPACING;
-  for (let n = -1; n <= Math.ceil(W / SPACING) + 1; n++) {
-    const x = n * SPACING - (scroll % (K * SPACING));
-    const idx = ((n % K) + K) % K;
-    const o = price[idx], c = price[idx + 1], hi = Math.max(o, c), lo = Math.min(o, c);
-    const col = c >= o ? COLORS.up : COLORS.down;
-    ctx.strokeStyle = col; ctx.fillStyle = col; ctx.globalAlpha = 0.9; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(x + 7, py(hi) - wick[idx][0]); ctx.lineTo(x + 7, py(lo) + wick[idx][1]); ctx.stroke();
-    ctx.fillRect(x + 2, py(hi), 10, Math.max(3, py(lo) - py(hi)));
-    ctx.globalAlpha = 0.35; ctx.fillRect(x + 2, 705 - volume[idx] * 62, 10, volume[idx] * 62);
-  }
-  ctx.restore();
-  ctx.globalAlpha = 1;
-
-  // ticker on the right, scrolling up, faded at both ends
-  ctx.font = "15px monospace"; ctx.textBaseline = "middle";
-  const rowScroll = t * ROWS * ROW_H;
-  for (let r = -1; r <= Math.ceil(H / ROW_H) + 1; r++) {
-    const y = r * ROW_H + 14 - (rowScroll % (ROWS * ROW_H));
-    const row = ticker[((r % ROWS) + ROWS) % ROWS];
-    const fade = Math.min(1, Math.max(0, y / 90), Math.max(0, (H - y) / 90));
-    ctx.globalAlpha = 0.85 * fade;
-    ctx.fillStyle = COLORS.text; ctx.fillText(row.pair, 930, y);
-    ctx.fillStyle = "#f8fafc"; ctx.fillText(row.px, 1010, y);
-    ctx.fillStyle = row.move >= 0 ? COLORS.up : COLORS.down; ctx.fillText(`${row.move >= 0 ? "+" : ""}${row.move.toFixed(2)}%`, 1115, y);
-    ctx.fillStyle = COLORS.text; ctx.fillText(String(row.vol), 1195, y);
   }
   ctx.globalAlpha = 1;
 }
